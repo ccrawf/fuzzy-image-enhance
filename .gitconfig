@@ -1,0 +1,5 @@
+user.name=ccrawf
+user.email=crawfordc14@yahoo.com
+commit.gpgsign=false
+gpg.sign false
+user.signingkey ""
