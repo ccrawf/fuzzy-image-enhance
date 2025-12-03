@@ -49,7 +49,8 @@ def inferenceSystem(controller):
 # Variables
 hueRange = np.arange(0,360, 1) # hue range: 0-360
 svRange = np.arange(0, 256, 1) # sat/value range: 0-255
-deltaRange = np.arange(-16,16,1) # delta saturation/value
+deltaSaturation = np.arange(-50,50,1)
+deltaValue = np.arange(-20,20,1)
 
 # Fuzzy Variables
 hueInitial = Antecedent(hueRange, 'hueInitial')
@@ -57,8 +58,8 @@ saturationInitial = Antecedent(svRange, 'saturationInitial')
 valueInitial = Antecedent(svRange, 'valueInitial')
 
 hueFinal = Consequent(hueRange, 'hueFinal')
-saturationAdj = Consequent(deltaRange, 'saturationAdj')
-valueAdj = Consequent(deltaRange, 'valueAdj')
+saturationAdj = Consequent(deltaSaturation, 'saturationAdj')
+valueAdj = Consequent(deltaValue, 'valueAdj')
 
 # Membership Functions (Input)
 hueInitial['red'] = trapmf(hueRange, [0,0,10,15])
@@ -100,36 +101,37 @@ hueFinal['purple'] = trapmf(hueRange, [255,270,290,305])
 hueFinal['pink'] = trapmf(hueRange, [295,305,330,345])
 hueFinal['red2'] = trapmf(hueRange, [330,345,359,359])
 
-saturationAdj['dec_big'] = trapmf(deltaRange, [-16,-16,-8,-4])
-saturationAdj['dec_small'] = trapmf(deltaRange, [-8,-4,-1,0])
-saturationAdj['no_change'] = trapmf(deltaRange, [-1,0,0,1])
-saturationAdj['inc_small'] = trapmf(deltaRange, [0,1,4,8])
-saturationAdj['inc_big'] = trapmf(deltaRange, [4,8,50,50])
+saturationAdj['dec_big'] = trapmf(deltaSaturation, [-50,-50,-30,-25])
+saturationAdj['dec_small'] = trapmf(deltaSaturation, [-30,-25,-1,0])
+saturationAdj['no_change'] = trapmf(deltaSaturation, [-1,0,0,1])
+saturationAdj['inc_small'] = trapmf(deltaSaturation, [0,1,25,30])
+saturationAdj['inc_big'] = trapmf(deltaSaturation, [25,30,50,50])
 
-valueAdj['dec_big'] = trapmf(deltaRange, [-16,-16,-8,-4])
-valueAdj['dec_small'] = trapmf(deltaRange, [-8,-4,-1,0])
-valueAdj['no_change'] = trapmf(deltaRange, [-1,0,0,1])
-valueAdj['inc_small'] = trapmf(deltaRange, [0,1,4,8])
-valueAdj['inc_big'] = trapmf(deltaRange, [4,8,50,50])
+valueAdj['dec_big'] = trapmf(deltaValue, [-20,-20,-16,-12])
+valueAdj['dec_small'] = trapmf(deltaValue, [-16,-12,-1,0])
+valueAdj['no_change'] = trapmf(deltaValue, [-1,0,0,1])
+valueAdj['inc_small'] = trapmf(deltaValue, [0,1,12,16])
+valueAdj['inc_big'] = trapmf(deltaValue, [12,16,20,20])
 
 
 
 # Rules
 rule1 = Rule(saturationInitial['dull'], saturationAdj['inc_big'])
 rule2 = Rule(saturationInitial['m_dull'], saturationAdj['inc_big'])
-rule3 = Rule(saturationInitial['moderate'], saturationAdj['inc_big'])
-rule4 = Rule(saturationInitial['m_vivid'], saturationAdj['inc_big'])
-rule5 = Rule(saturationInitial['vivid'], saturationAdj['no_change'])
+rule3 = Rule(saturationInitial['moderate'], saturationAdj['inc_small'])
+rule4 = Rule(saturationInitial['m_vivid'], saturationAdj['no_change'])
+rule5 = Rule(saturationInitial['vivid'], saturationAdj['dec_small'])
 
 rule6 = Rule(valueInitial['smooth'], valueAdj['inc_big'])
-rule7 = Rule(valueInitial['m_smooth'], valueAdj['inc_big'])
-rule8 = Rule(valueInitial['medium'], valueAdj['inc_big'])
-rule9 = Rule(valueInitial['m_sharp'], valueAdj['inc_big'])
-rule10 = Rule(valueInitial['sharp'], valueAdj['no_change'])
+rule7 = Rule(valueInitial['m_smooth'], valueAdj['inc_small'])
+rule8 = Rule(valueInitial['medium'], valueAdj['no_change'])
+rule9 = Rule(valueInitial['m_sharp'], valueAdj['dec_small'])
+rule10 = Rule(valueInitial['sharp'], valueAdj['dec_big'])
+
 ruleset = [rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10]
 
 # Import input image
-path = "inputs/man.png"
+path = "inputs/einstein.png"
 file_name = path.split('/')[1].split('.')[0]
 image, width, height = importImage(path)
 
@@ -151,8 +153,6 @@ for i, pixel in enumerate(image):
 
     s_final = int(s + s_delta)
     v_final = int(v + v_delta)
-
-    # print(s, s_final)
 
     image[i] = (h, s_final, v_final)
 
