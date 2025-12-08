@@ -11,7 +11,20 @@ from skfuzzy.membership import trapmf
 import matplotlib.pyplot as plt
 # from skfuzzy.image import nmse
 
-# Read import image and convert array to HSV
+# Convert to YCrCb format, perform equalization on luminance (Y), return equalized BGR image
+def histEqualize(image):
+    clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(12,12))
+
+    ycrcbImage = cv.cvtColor(image, cv.COLOR_BGR2YCrCb)
+    y, cr, cb = cv.split(ycrcbImage)
+
+    equalizedY = clahe.apply(y)
+    equalizedYcrcbImage = cv.merge([equalizedY, cr, cb])
+    equalizedImage = cv.cvtColor(equalizedYcrcbImage, cv.COLOR_YCrCb2BGR)
+
+    return equalizedImage
+
+# Read import image, perform histogram equalization, and convert array to HSV
 # Also return size of image
 def importImage(path):
     inputImage = cv.imread(path)
@@ -21,8 +34,10 @@ def importImage(path):
     
     width = len(inputImage[0])
     height = len(inputImage)
+
+    equalizedImage = histEqualize(inputImage)
     
-    hsvImage = cv.cvtColor(inputImage, cv.COLOR_BGR2HSV)
+    hsvImage = cv.cvtColor(equalizedImage, cv.COLOR_BGR2HSV)
     reshapedImage = hsvImage.reshape(-1, hsvImage.shape[2])
     return reshapedImage, width, height
 
@@ -46,9 +61,10 @@ def inferenceSystem(controller):
     return saturation_map, value_map
     
 
-# Variables
+# Antecedent/Consequent ranges
 hueRange = np.arange(0,360, 1) # hue range: 0-360
 svRange = np.arange(0, 256, 1) # sat/value range: 0-255
+deltaHue = np.arange(0.9, 1.1, 0.01)
 deltaSaturation = np.arange(-50,50,1)
 deltaValue = np.arange(-20,20,1)
 
@@ -79,8 +95,8 @@ saturationInitial['moderate'] = trapmf(svRange, [64,82,138,156])
 saturationInitial['m_vivid'] = trapmf(svRange, [138,156,173,191])
 saturationInitial['vivid'] = trapmf(svRange, [173,191,255,255])
 
-# 0 = black
-# 255 = no darkness
+# 0 = no darkness
+# 255 = black
 valueInitial['smooth'] = trapmf(svRange, [0,0,55,70])
 valueInitial['m_smooth'] = trapmf(svRange, [55,70,95,110])
 valueInitial['medium'] = trapmf(svRange, [95,110,140,155])
@@ -115,36 +131,55 @@ valueAdj['inc_big'] = trapmf(deltaValue, [12,16,20,20])
 
 
 
-# Rules
-rule1 = Rule(saturationInitial['dull'], saturationAdj['inc_big'])
-rule2 = Rule(saturationInitial['m_dull'], saturationAdj['inc_big'])
-rule3 = Rule(saturationInitial['moderate'], saturationAdj['inc_small'])
-rule4 = Rule(saturationInitial['m_vivid'], saturationAdj['no_change'])
-rule5 = Rule(saturationInitial['vivid'], saturationAdj['dec_small'])
+# Rules 
 
-rule6 = Rule(valueInitial['smooth'], valueAdj['inc_big'])
-rule7 = Rule(valueInitial['m_smooth'], valueAdj['inc_small'])
-rule8 = Rule(valueInitial['medium'], valueAdj['no_change'])
-rule9 = Rule(valueInitial['m_sharp'], valueAdj['dec_small'])
-rule10 = Rule(valueInitial['sharp'], valueAdj['dec_big'])
+# All possible combinations of S and V
+rule1 = Rule(saturationInitial['dull'] & valueInitial['smooth'], (saturationAdj['inc_small'], valueAdj['inc_big']))
+rule2 = Rule(saturationInitial['dull'] & valueInitial['m_smooth'], (saturationAdj['inc_big'], valueAdj['inc_small']))
+rule3 = Rule(saturationInitial['dull'] & valueInitial['medium'], (saturationAdj['inc_big'], valueAdj['inc_small']))
+rule4 = Rule(saturationInitial['dull'] & valueInitial['m_sharp'], (saturationAdj['inc_big'], valueAdj['no_change']))
+rule5 = Rule(saturationInitial['dull'] & valueInitial['sharp'], (saturationAdj['inc_big'], valueAdj['no_change']))
 
-ruleset = [rule1, rule2, rule3, rule4, rule5, rule6, rule7, rule8, rule9, rule10]
+rule6 = Rule(saturationInitial['m_dull'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_big']))
+rule7 = Rule(saturationInitial['m_dull'] & valueInitial['m_smooth'], (saturationAdj['inc_small'], valueAdj['inc_small']))
+rule8 = Rule(saturationInitial['m_dull'] & valueInitial['medium'], (saturationAdj['inc_big'], valueAdj['no_change']))
+rule9 = Rule(saturationInitial['m_dull'] & valueInitial['m_sharp'], (saturationAdj['inc_big'], valueAdj['no_change']))
+rule10 = Rule(saturationInitial['m_dull'] & valueInitial['sharp'], (saturationAdj['inc_big'], valueAdj['dec_small']))
+
+rule11 = Rule(saturationInitial['moderate'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_small']))
+rule12 = Rule(saturationInitial['moderate'] & valueInitial['m_smooth'], (saturationAdj['no_change'], valueAdj['no_change']))
+rule13 = Rule(saturationInitial['moderate'] & valueInitial['medium'], (saturationAdj['inc_small'], valueAdj['no_change']))
+rule14 = Rule(saturationInitial['moderate'] & valueInitial['m_sharp'], (saturationAdj['inc_small'], valueAdj['no_change']))
+rule15 = Rule(saturationInitial['moderate'] & valueInitial['sharp'], (saturationAdj['inc_small'], valueAdj['dec_small']))
+
+rule16 = Rule(saturationInitial['m_vivid'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_small']))
+rule17 = Rule(saturationInitial['m_vivid'] & valueInitial['m_smooth'], (saturationAdj['no_change'], valueAdj['no_change']))
+rule18 = Rule(saturationInitial['m_vivid'] & valueInitial['medium'], (saturationAdj['no_change'], valueAdj['dec_small']))
+rule19 = Rule(saturationInitial['m_vivid'] & valueInitial['m_sharp'], (saturationAdj['dec_small'], valueAdj['dec_small']))
+rule20 = Rule(saturationInitial['m_vivid'] & valueInitial['sharp'], (saturationAdj['dec_small'], valueAdj['dec_big']))
+
+rule21 = Rule(saturationInitial['vivid'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_small']))
+rule22 = Rule(saturationInitial['vivid'] & valueInitial['m_smooth'], (saturationAdj['dec_small'], valueAdj['no_change']))
+rule23 = Rule(saturationInitial['vivid'] & valueInitial['medium'], (saturationAdj['dec_small'], valueAdj['dec_small']))
+rule24 = Rule(saturationInitial['vivid'] & valueInitial['m_sharp'], (saturationAdj['dec_big'], valueAdj['dec_big']))
+rule25 = Rule(saturationInitial['vivid'] & valueInitial['sharp'], (saturationAdj['dec_big'], valueAdj['dec_big']))
+
+ruleset = [
+    rule1,  rule2,  rule3,  rule4,  rule5, 
+    rule6,  rule7,  rule8,  rule9,  rule10,
+    rule11, rule12, rule13, rule14, rule15,
+    rule16, rule17, rule18, rule19, rule20,
+    rule21, rule22, rule23, rule24, rule25
+    ]
 
 # Import input image
-path = "inputs/einstein.png"
+path = "inputs/coyote.png"
 file_name = path.split('/')[1].split('.')[0]
 image, width, height = importImage(path)
 
-# Inference System
+# # Inference System
 controller = ControlSystem(ruleset)
 saturation_map, value_map = inferenceSystem(controller)
-
-# saturationAdj.view()
-# valueAdj.view()
-
-# plt.show()
-
-print(image[0])
 
 for i, pixel in enumerate(image):
     h, s, v = pixel
@@ -159,7 +194,5 @@ for i, pixel in enumerate(image):
 # Export output image
 image_3d = image.reshape(height, width, 3)
 output_image = cv.cvtColor(image_3d, cv.COLOR_HSV2BGR)
-
-print(output_image[0])
 
 cv.imwrite(f'outputs/{file_name}_enhanced.png', output_image)
