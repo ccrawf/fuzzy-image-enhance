@@ -1,70 +1,116 @@
 import numpy as np
 import cv2 as cv
+import os
 
 from skfuzzy.control import Rule
 from skfuzzy.control import ControlSystem
 from skfuzzy.control import ControlSystemSimulation
 from skfuzzy.control import Antecedent
 from skfuzzy.control import Consequent
-from skfuzzy.defuzzify import defuzz
 from skfuzzy.membership import trapmf
 import matplotlib.pyplot as plt
-# from skfuzzy.image import nmse
+from skimage.metrics import normalized_root_mse as nrmse
 
 # Convert to YCrCb format, perform equalization on luminance (Y), return equalized BGR image
 def histEqualize(image):
     clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(12,12))
 
-    ycrcbImage = cv.cvtColor(image, cv.COLOR_BGR2YCrCb)
-    y, cr, cb = cv.split(ycrcbImage)
+    ycrcb_image = cv.cvtColor(image, cv.COLOR_BGR2YCrCb)
+    y, cr, cb = cv.split(ycrcb_image)
 
-    equalizedY = clahe.apply(y)
-    equalizedYcrcbImage = cv.merge([equalizedY, cr, cb])
-    equalizedImage = cv.cvtColor(equalizedYcrcbImage, cv.COLOR_YCrCb2BGR)
+    equalized_y = clahe.apply(y)
+    equalized_ycrcb_image = cv.merge([equalized_y, cr, cb])
+    equalized_image = cv.cvtColor(equalized_ycrcb_image, cv.COLOR_YCrCb2BGR)
 
-    return equalizedImage
+    return equalized_image
 
 # Read import image, perform histogram equalization, and convert array to HSV
-# Also return size of image
+# Return size of image
 def importImage(path):
-    inputImage = cv.imread(path)
-    if inputImage is None:
+    input_image = cv.imread(path)
+    if input_image is None:
         print(f"Error: Could not load image from {path}")
         return None
     
-    width = len(inputImage[0])
-    height = len(inputImage)
+    width = len(input_image[0])
+    height = len(input_image)
 
-    equalizedImage = histEqualize(inputImage)
+    # Call other function to apply CLAHE (Contrast-Limited Adaptive Histogram Equalization)
+    equalized_image = histEqualize(input_image)
     
-    hsvImage = cv.cvtColor(equalizedImage, cv.COLOR_BGR2HSV)
-    reshapedImage = hsvImage.reshape(-1, hsvImage.shape[2])
-    return reshapedImage, width, height
+    hsv_image = cv.cvtColor(equalized_image, cv.COLOR_BGR2HSV)
+    reshaped_image = hsv_image.reshape(-1, hsv_image.shape[2])
+    return input_image, reshaped_image, width, height
 
+# Compute an output delta value for all possible input values based on rule set
 def inferenceSystem(controller):
-
     sim = ControlSystemSimulation(controller)
 
+    hue_map = np.zeros(360)
     saturation_map = np.zeros(256)
     value_map = np.zeros(256)
     
     for i in range(256):
         sim.reset()
+        sim.input['hueInitial'] = i
         sim.input['saturationInitial'] = i
         sim.input['valueInitial'] = i
         sim.compute()
 
+        hue_map[i] = sim.output.get('hueAdj', 0)
         saturation_map[i] = sim.output.get('saturationAdj', 0)
         value_map[i] = sim.output.get('valueAdj', 0)
 
 
-    return saturation_map, value_map
-    
+    return hue_map, saturation_map, value_map
+
+# Full image transformation 
+def transformImage(image_name):
+    # Import input image
+    path = f"images_data/inputs/{image_name}.png"
+    file_name = path.split('/')[1].split('.')[0]
+    input_image, image, width, height = importImage(path)
+
+    # Inference System
+    controller = ControlSystem(ruleset)
+    hue_map, saturation_map, value_map = inferenceSystem(controller)
+
+    for i, pixel in enumerate(image):
+        h, s, v = pixel
+        h_delta = hue_map[int(h)]
+        s_delta = saturation_map[int(s)]
+        v_delta = value_map[int(v)]
+
+        h_final = int(h + h_delta)
+        s_final = int(s + s_delta)
+        v_final = int(v + v_delta)
+
+        image[i] = (h_final, s_final, v_final)
+
+    # Export output image
+    image_3d = image.reshape(height, width, 3)
+    output_image = cv.cvtColor(image_3d, cv.COLOR_HSV2BGR)
+
+    cv.imwrite(f'images_data/outputs/{file_name}_enhanced.png', output_image)
+
+    return input_image, output_image
+
+# Display current membership functions (used for testing only)
+def printMembershipFunctions():
+    hueInitial.view()
+    saturationInitial.view()
+    valueInitial.view()
+    hueAdj.view()
+    saturationAdj.view()
+    valueAdj.view()
+
+    plt.show()
 
 # Antecedent/Consequent ranges
 hueRange = np.arange(0,360, 1) # hue range: 0-360
 svRange = np.arange(0, 256, 1) # sat/value range: 0-255
-deltaHue = np.arange(0.9, 1.1, 0.01)
+
+deltaHue = np.arange(-20, 20, 1)
 deltaSaturation = np.arange(-50,50,1)
 deltaValue = np.arange(-20,20,1)
 
@@ -73,7 +119,7 @@ hueInitial = Antecedent(hueRange, 'hueInitial')
 saturationInitial = Antecedent(svRange, 'saturationInitial')
 valueInitial = Antecedent(svRange, 'valueInitial')
 
-hueFinal = Consequent(hueRange, 'hueFinal')
+hueAdj = Consequent(deltaHue, 'hueAdj')
 saturationAdj = Consequent(deltaSaturation, 'saturationAdj')
 valueAdj = Consequent(deltaValue, 'valueAdj')
 
@@ -89,33 +135,24 @@ hueInitial['purple'] = trapmf(hueRange, [255,270,290,305])
 hueInitial['pink'] = trapmf(hueRange, [295,305,330,345])
 hueInitial['red2'] = trapmf(hueRange, [330,345,359,359])
 
-saturationInitial['dull'] = trapmf(svRange, [0,0,28,46])
+saturationInitial['dull'] = trapmf(svRange, [0,0,28,46]) # no color
 saturationInitial['m_dull'] = trapmf(svRange, [28,46,64,82])
 saturationInitial['moderate'] = trapmf(svRange, [64,82,138,156])
 saturationInitial['m_vivid'] = trapmf(svRange, [138,156,173,191])
-saturationInitial['vivid'] = trapmf(svRange, [173,191,255,255])
+saturationInitial['vivid'] = trapmf(svRange, [173,191,255,255]) # full color
 
-# 0 = no darkness
-# 255 = black
-valueInitial['smooth'] = trapmf(svRange, [0,0,55,70])
+valueInitial['smooth'] = trapmf(svRange, [0,0,55,70]) # no darkness
 valueInitial['m_smooth'] = trapmf(svRange, [55,70,95,110])
 valueInitial['medium'] = trapmf(svRange, [95,110,140,155])
 valueInitial['m_sharp'] = trapmf(svRange, [140,155,180,195])
-valueInitial['sharp'] = trapmf(svRange, [180,195,255,255])
-
-
+valueInitial['sharp'] = trapmf(svRange, [180,195,255,255]) # black
 
 # Membership Functions (Output)
-hueFinal['red'] = trapmf(hueRange, [0,0,10,15])
-hueFinal['brown'] = trapmf(hueRange, [10,15,18,23])
-hueFinal['orange'] = trapmf(hueRange, [18,23,35,40])
-hueFinal['yellow'] = trapmf(hueRange, [35,40,60,90])
-hueFinal['green'] = trapmf(hueRange, [70,90,130,160])
-hueFinal['cyan'] = trapmf(hueRange, [140,160,190,210])
-hueFinal['blue'] = trapmf(hueRange, [190,210,240,270])
-hueFinal['purple'] = trapmf(hueRange, [255,270,290,305])
-hueFinal['pink'] = trapmf(hueRange, [295,305,330,345])
-hueFinal['red2'] = trapmf(hueRange, [330,345,359,359])
+hueAdj['dec_big'] = trapmf(deltaHue, [-20,-20,-12,-10])
+hueAdj['dec_small'] = trapmf(deltaHue, [-12,-10,-1,0])
+hueAdj['no_change'] = trapmf(deltaHue, [-1,0,0,1])
+hueAdj['inc_small'] = trapmf(deltaHue, [0,1,10,12])
+hueAdj['inc_big'] = trapmf(deltaHue, [10,12,20,20])
 
 saturationAdj['dec_big'] = trapmf(deltaSaturation, [-50,-50,-30,-25])
 saturationAdj['dec_small'] = trapmf(deltaSaturation, [-30,-25,-1,0])
@@ -129,10 +166,7 @@ valueAdj['no_change'] = trapmf(deltaValue, [-1,0,0,1])
 valueAdj['inc_small'] = trapmf(deltaValue, [0,1,12,16])
 valueAdj['inc_big'] = trapmf(deltaValue, [12,16,20,20])
 
-
-
-# Rules 
-
+# Rules
 # All possible combinations of S and V
 rule1 = Rule(saturationInitial['dull'] & valueInitial['smooth'], (saturationAdj['inc_small'], valueAdj['inc_big']))
 rule2 = Rule(saturationInitial['dull'] & valueInitial['m_smooth'], (saturationAdj['inc_big'], valueAdj['inc_small']))
@@ -164,35 +198,34 @@ rule23 = Rule(saturationInitial['vivid'] & valueInitial['medium'], (saturationAd
 rule24 = Rule(saturationInitial['vivid'] & valueInitial['m_sharp'], (saturationAdj['dec_big'], valueAdj['dec_big']))
 rule25 = Rule(saturationInitial['vivid'] & valueInitial['sharp'], (saturationAdj['dec_big'], valueAdj['dec_big']))
 
+# Additional rules (edge cases with hue)
+rule26 = Rule(hueInitial['red'] |
+ hueInitial['brown'] |
+ hueInitial['orange'] |
+ hueInitial['yellow'] |
+ hueInitial['green'] |
+ hueInitial['cyan'] |
+ hueInitial['blue'] |
+ hueInitial['purple'] |
+ hueInitial['pink'] |
+ hueInitial['red2'], 
+ hueAdj['no_change'])
+
 ruleset = [
     rule1,  rule2,  rule3,  rule4,  rule5, 
     rule6,  rule7,  rule8,  rule9,  rule10,
     rule11, rule12, rule13, rule14, rule15,
     rule16, rule17, rule18, rule19, rule20,
-    rule21, rule22, rule23, rule24, rule25
+    rule21, rule22, rule23, rule24, rule25,
+    rule26
     ]
 
-# Import input image
-path = "inputs/coyote.png"
-file_name = path.split('/')[1].split('.')[0]
-image, width, height = importImage(path)
+image_names = ['coyote', 'einstein', 'forest', 'man']
+for name in image_names:
+    # Fuzzy image transform
+    input_image, output_image = transformImage(name)
 
-# # Inference System
-controller = ControlSystem(ruleset)
-saturation_map, value_map = inferenceSystem(controller)
-
-for i, pixel in enumerate(image):
-    h, s, v = pixel
-    s_delta = saturation_map[int(s)]
-    v_delta = value_map[int(v)]
-
-    s_final = int(s + s_delta)
-    v_final = int(v + v_delta)
-
-    image[i] = (h, s_final, v_final)
-
-# Export output image
-image_3d = image.reshape(height, width, 3)
-output_image = cv.cvtColor(image_3d, cv.COLOR_HSV2BGR)
-
-cv.imwrite(f'outputs/{file_name}_enhanced.png', output_image)
+    # Metrics analysis
+    image_nrmse = nrmse(input_image, output_image)
+    print(f"{name}:")
+    print("NRMSE:", image_nrmse)
