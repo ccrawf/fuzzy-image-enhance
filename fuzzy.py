@@ -10,6 +10,7 @@ from skfuzzy.control import Consequent
 from skfuzzy.membership import trapmf
 import matplotlib.pyplot as plt
 from skimage.metrics import normalized_root_mse as nrmse
+from skimage.measure import shannon_entropy
 
 # Convert to YCrCb format, perform equalization on luminance (Y), return equalized BGR image
 def histEqualize(image):
@@ -68,7 +69,6 @@ def inferenceSystem(controller):
 def transformImage(image_name):
     # Import input image
     path = f"images_data/inputs/{image_name}.png"
-    file_name = path.split('/')[1].split('.')[0]
     input_image, image, width, height = importImage(path)
 
     # Inference System
@@ -91,7 +91,7 @@ def transformImage(image_name):
     image_3d = image.reshape(height, width, 3)
     output_image = cv.cvtColor(image_3d, cv.COLOR_HSV2BGR)
 
-    cv.imwrite(f'images_data/outputs/{file_name}_enhanced.png', output_image)
+    cv.imwrite(f'images_data/outputs/{image_name}_enhanced.png', output_image)
 
     return input_image, output_image
 
@@ -105,6 +105,18 @@ def printMembershipFunctions():
     valueAdj.view()
 
     plt.show()
+
+# Returns list of file names in input image directory
+def getImageNames(path):
+    image_names = []
+
+    for item in os.listdir(path):
+        item_path = os.path.join(path, item)
+        if os.path.isfile(item_path):
+            item = item.split('.')[0]
+            image_names.append(item)
+
+    return image_names
 
 # Antecedent/Consequent ranges
 hueRange = np.arange(0,360, 1) # hue range: 0-360
@@ -220,12 +232,17 @@ ruleset = [
     rule26
     ]
 
-image_names = ['coyote', 'einstein', 'forest', 'man']
+image_names = getImageNames('images_data/inputs/')
 for name in image_names:
     # Fuzzy image transform
     input_image, output_image = transformImage(name)
 
     # Metrics analysis
     image_nrmse = nrmse(input_image, output_image)
+    image_entropy = abs(shannon_entropy(output_image) - shannon_entropy(input_image))
+
     print(f"{name}:")
     print("NRMSE:", image_nrmse)
+    print("Shannon Entropy:", image_entropy)
+    print("Tenengrad Score:")
+    print("\n")
