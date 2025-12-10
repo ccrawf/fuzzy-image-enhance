@@ -104,7 +104,7 @@ def transformImage(image_name):
     image_3d = image.reshape(height, width, 3)
     output_image = cv.cvtColor(image_3d, cv.COLOR_HSV2BGR)
 
-    cv.imwrite(f'images_data/outputs/{image_name}_enhanced.png', output_image)
+    cv.imwrite(f'images_data/outputs/fuzzy/{image_name}_enhanced.png', output_image)
 
     return input_image, output_image
 
@@ -239,22 +239,24 @@ ruleset = [
     rule26, rule27, rule28
     ]
 
-# Inference System
-controller = ControlSystem(ruleset)
-saturation_map, value_map = inferenceSystem(controller)
+# Main code block
+if __name__ == '__main__':
+    # Inference System
+    controller = ControlSystem(ruleset)
+    saturation_map, value_map = inferenceSystem(controller)
 
-image_names = getImageNames('images_data/inputs/')
-for name in image_names:
-    # Fuzzy image transform
-    input_image, output_image = transformImage(name)
+    image_names = getImageNames('images_data/inputs/')
+    for name in image_names:
+        # Fuzzy image transform
+        input_image, output_image = transformImage(name)
 
-    # Metrics analysis
-    image_nrmse = nrmse(input_image, output_image)
-    image_entropy = computeEntropy(output_image) - computeEntropy(input_image)
-    image_tenengrad = computeTenengrad(output_image)
+        # Metrics analysis
+        image_nrmse = nrmse(input_image, output_image)
+        image_entropy = computeEntropy(output_image) - computeEntropy(input_image)
+        image_tenengrad = computeTenengrad(output_image)
 
-    print(f"{name}:")
-    print("NRMSE:", image_nrmse)
-    print("Shannon Entropy:", image_entropy)
-    print("Tenengrad Score:", image_tenengrad)
-    print("\n")
+        print(f"{name}:")
+        print("NRMSE:", image_nrmse)
+        print("Shannon Entropy:", image_entropy)
+        print("Tenengrad Score:", image_tenengrad)
+        print("\n")
