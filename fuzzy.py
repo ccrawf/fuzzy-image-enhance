@@ -68,7 +68,6 @@ def importImage(path, name):
 def inferenceSystem(controller):
     sim = ControlSystemSimulation(controller)
 
-    hue_map = np.zeros(360)
     saturation_map = np.zeros(256)
     value_map = np.zeros(256)
     
@@ -79,34 +78,27 @@ def inferenceSystem(controller):
         sim.input['valueInitial'] = i
         sim.compute()
 
-        hue_map[i] = sim.output.get('hueAdj', 0)
         saturation_map[i] = sim.output.get('saturationAdj', 0)
         value_map[i] = sim.output.get('valueAdj', 0)
 
 
-    return hue_map, saturation_map, value_map
+    return saturation_map, value_map
 
 # Full image transformation 
 def transformImage(image_name):
     # Import input image
     path = f"images_data/inputs/{image_name}.png"
     input_image, image, width, height = importImage(path, image_name)
-
-    # Inference System
-    controller = ControlSystem(ruleset)
-    hue_map, saturation_map, value_map = inferenceSystem(controller)
-
+    
     for i, pixel in enumerate(image):
         h, s, v = pixel
-        h_delta = hue_map[int(h)]
         s_delta = saturation_map[int(s)]
         v_delta = value_map[int(v)]
 
-        h_final = int(h + h_delta)
         s_final = int(s + s_delta)
         v_final = int(v + v_delta)
 
-        image[i] = (h_final, s_final, v_final)
+        image[i] = (h, s_final, v_final)
 
     # Export output image
     image_3d = image.reshape(height, width, 3)
@@ -121,7 +113,6 @@ def printMembershipFunctions():
     hueInitial.view()
     saturationInitial.view()
     valueInitial.view()
-    hueAdj.view()
     saturationAdj.view()
     valueAdj.view()
 
@@ -145,10 +136,9 @@ def computeTenengrad(image):
     return np.mean(tenengrad)
 
 # Antecedent/Consequent ranges
-hueRange = np.arange(0,360, 1) # hue range: 0-360
+hueRange = np.arange(0,180, 1) # hue range: 0-180
 svRange = np.arange(0, 256, 1) # sat/value range: 0-255
 
-deltaHue = np.arange(-20, 20, 1)
 deltaSaturation = np.arange(-50,50,1)
 deltaValue = np.arange(-20,20,1)
 
@@ -157,21 +147,20 @@ hueInitial = Antecedent(hueRange, 'hueInitial')
 saturationInitial = Antecedent(svRange, 'saturationInitial')
 valueInitial = Antecedent(svRange, 'valueInitial')
 
-hueAdj = Consequent(deltaHue, 'hueAdj')
 saturationAdj = Consequent(deltaSaturation, 'saturationAdj')
 valueAdj = Consequent(deltaValue, 'valueAdj')
 
 # Membership Functions (Input)
-hueInitial['red'] = trapmf(hueRange, [0,0,10,15])
-hueInitial['brown'] = trapmf(hueRange, [10,15,18,23])
-hueInitial['orange'] = trapmf(hueRange, [18,23,35,40])
-hueInitial['yellow'] = trapmf(hueRange, [35,40,60,90])
-hueInitial['green'] = trapmf(hueRange, [70,90,130,160])
-hueInitial['cyan'] = trapmf(hueRange, [140,160,190,210])
-hueInitial['blue'] = trapmf(hueRange, [190,210,240,270])
-hueInitial['purple'] = trapmf(hueRange, [255,270,290,305])
-hueInitial['pink'] = trapmf(hueRange, [295,305,330,345])
-hueInitial['red2'] = trapmf(hueRange, [330,345,359,359])
+hueInitial['red'] = trapmf(hueRange, [0,0,5,8])
+hueInitial['brown'] = trapmf(hueRange, [5,8,9,12])
+hueInitial['orange'] = trapmf(hueRange, [9,12,18,20])
+hueInitial['yellow'] = trapmf(hueRange, [18,20,30,40])
+hueInitial['green'] = trapmf(hueRange, [30,40,65,80])
+hueInitial['cyan'] = trapmf(hueRange, [70,80,95,105])
+hueInitial['blue'] = trapmf(hueRange, [95,105,120,135])
+hueInitial['purple'] = trapmf(hueRange, [128,135,145,153])
+hueInitial['pink'] = trapmf(hueRange, [148,153,165,172])
+hueInitial['red2'] = trapmf(hueRange, [165,172,179,179])
 
 saturationInitial['dull'] = trapmf(svRange, [0,0,28,46]) # no color
 saturationInitial['m_dull'] = trapmf(svRange, [28,46,64,82])
@@ -179,19 +168,13 @@ saturationInitial['moderate'] = trapmf(svRange, [64,82,138,156])
 saturationInitial['m_vivid'] = trapmf(svRange, [138,156,173,191])
 saturationInitial['vivid'] = trapmf(svRange, [173,191,255,255]) # full color
 
-valueInitial['smooth'] = trapmf(svRange, [0,0,55,70]) # no darkness
-valueInitial['m_smooth'] = trapmf(svRange, [55,70,95,110])
+valueInitial['dark'] = trapmf(svRange, [0,0,55,70]) # black
+valueInitial['m_dark'] = trapmf(svRange, [55,70,95,110])
 valueInitial['medium'] = trapmf(svRange, [95,110,140,155])
-valueInitial['m_sharp'] = trapmf(svRange, [140,155,180,195])
-valueInitial['sharp'] = trapmf(svRange, [180,195,255,255]) # black
+valueInitial['m_bright'] = trapmf(svRange, [140,155,180,195])
+valueInitial['bright'] = trapmf(svRange, [180,195,255,255]) # no darkness
 
 # Membership Functions (Output)
-hueAdj['dec_big'] = trapmf(deltaHue, [-20,-20,-12,-10])
-hueAdj['dec_small'] = trapmf(deltaHue, [-12,-10,-1,0])
-hueAdj['no_change'] = trapmf(deltaHue, [-1,0,0,1])
-hueAdj['inc_small'] = trapmf(deltaHue, [0,1,10,12])
-hueAdj['inc_big'] = trapmf(deltaHue, [10,12,20,20])
-
 saturationAdj['dec_big'] = trapmf(deltaSaturation, [-50,-50,-30,-25])
 saturationAdj['dec_small'] = trapmf(deltaSaturation, [-30,-25,-1,0])
 saturationAdj['no_change'] = trapmf(deltaSaturation, [-1,0,0,1])
@@ -206,48 +189,46 @@ valueAdj['inc_big'] = trapmf(deltaValue, [12,16,20,20])
 
 # Rules
 # All possible combinations of S and V
-rule1 = Rule(saturationInitial['dull'] & valueInitial['smooth'], (saturationAdj['inc_small'], valueAdj['inc_big']))
-rule2 = Rule(saturationInitial['dull'] & valueInitial['m_smooth'], (saturationAdj['inc_big'], valueAdj['inc_small']))
+rule1 = Rule(saturationInitial['dull'] & valueInitial['dark'], (saturationAdj['inc_small'], valueAdj['inc_big']))
+rule2 = Rule(saturationInitial['dull'] & valueInitial['m_dark'], (saturationAdj['inc_big'], valueAdj['inc_small']))
 rule3 = Rule(saturationInitial['dull'] & valueInitial['medium'], (saturationAdj['inc_big'], valueAdj['inc_small']))
-rule4 = Rule(saturationInitial['dull'] & valueInitial['m_sharp'], (saturationAdj['inc_big'], valueAdj['no_change']))
-rule5 = Rule(saturationInitial['dull'] & valueInitial['sharp'], (saturationAdj['inc_big'], valueAdj['no_change']))
+rule4 = Rule(saturationInitial['dull'] & valueInitial['m_bright'], (saturationAdj['inc_big'], valueAdj['no_change']))
+rule5 = Rule(saturationInitial['dull'] & valueInitial['bright'], (saturationAdj['inc_big'], valueAdj['no_change']))
 
-rule6 = Rule(saturationInitial['m_dull'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_big']))
-rule7 = Rule(saturationInitial['m_dull'] & valueInitial['m_smooth'], (saturationAdj['inc_small'], valueAdj['inc_small']))
+rule6 = Rule(saturationInitial['m_dull'] & valueInitial['dark'], (saturationAdj['no_change'], valueAdj['inc_big']))
+rule7 = Rule(saturationInitial['m_dull'] & valueInitial['m_dark'], (saturationAdj['inc_small'], valueAdj['inc_small']))
 rule8 = Rule(saturationInitial['m_dull'] & valueInitial['medium'], (saturationAdj['inc_big'], valueAdj['no_change']))
-rule9 = Rule(saturationInitial['m_dull'] & valueInitial['m_sharp'], (saturationAdj['inc_big'], valueAdj['no_change']))
-rule10 = Rule(saturationInitial['m_dull'] & valueInitial['sharp'], (saturationAdj['inc_big'], valueAdj['dec_small']))
+rule9 = Rule(saturationInitial['m_dull'] & valueInitial['m_bright'], (saturationAdj['inc_big'], valueAdj['no_change']))
+rule10 = Rule(saturationInitial['m_dull'] & valueInitial['bright'], (saturationAdj['inc_big'], valueAdj['dec_small']))
 
-rule11 = Rule(saturationInitial['moderate'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_small']))
-rule12 = Rule(saturationInitial['moderate'] & valueInitial['m_smooth'], (saturationAdj['no_change'], valueAdj['no_change']))
+rule11 = Rule(saturationInitial['moderate'] & valueInitial['dark'], (saturationAdj['no_change'], valueAdj['inc_small']))
+rule12 = Rule(saturationInitial['moderate'] & valueInitial['m_dark'], (saturationAdj['no_change'], valueAdj['no_change']))
 rule13 = Rule(saturationInitial['moderate'] & valueInitial['medium'], (saturationAdj['inc_small'], valueAdj['no_change']))
-rule14 = Rule(saturationInitial['moderate'] & valueInitial['m_sharp'], (saturationAdj['inc_small'], valueAdj['no_change']))
-rule15 = Rule(saturationInitial['moderate'] & valueInitial['sharp'], (saturationAdj['inc_small'], valueAdj['dec_small']))
+rule14 = Rule(saturationInitial['moderate'] & valueInitial['m_bright'], (saturationAdj['inc_small'], valueAdj['no_change']))
+rule15 = Rule(saturationInitial['moderate'] & valueInitial['bright'], (saturationAdj['inc_small'], valueAdj['dec_small']))
 
-rule16 = Rule(saturationInitial['m_vivid'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_small']))
-rule17 = Rule(saturationInitial['m_vivid'] & valueInitial['m_smooth'], (saturationAdj['no_change'], valueAdj['no_change']))
+rule16 = Rule(saturationInitial['m_vivid'] & valueInitial['dark'], (saturationAdj['no_change'], valueAdj['inc_small']))
+rule17 = Rule(saturationInitial['m_vivid'] & valueInitial['m_dark'], (saturationAdj['no_change'], valueAdj['no_change']))
 rule18 = Rule(saturationInitial['m_vivid'] & valueInitial['medium'], (saturationAdj['no_change'], valueAdj['dec_small']))
-rule19 = Rule(saturationInitial['m_vivid'] & valueInitial['m_sharp'], (saturationAdj['dec_small'], valueAdj['dec_small']))
-rule20 = Rule(saturationInitial['m_vivid'] & valueInitial['sharp'], (saturationAdj['dec_small'], valueAdj['dec_big']))
+rule19 = Rule(saturationInitial['m_vivid'] & valueInitial['m_bright'], (saturationAdj['dec_small'], valueAdj['dec_small']))
+rule20 = Rule(saturationInitial['m_vivid'] & valueInitial['bright'], (saturationAdj['dec_small'], valueAdj['dec_big']))
 
-rule21 = Rule(saturationInitial['vivid'] & valueInitial['smooth'], (saturationAdj['no_change'], valueAdj['inc_small']))
-rule22 = Rule(saturationInitial['vivid'] & valueInitial['m_smooth'], (saturationAdj['dec_small'], valueAdj['no_change']))
+rule21 = Rule(saturationInitial['vivid'] & valueInitial['dark'], (saturationAdj['no_change'], valueAdj['inc_small']))
+rule22 = Rule(saturationInitial['vivid'] & valueInitial['m_dark'], (saturationAdj['dec_small'], valueAdj['no_change']))
 rule23 = Rule(saturationInitial['vivid'] & valueInitial['medium'], (saturationAdj['dec_small'], valueAdj['dec_small']))
-rule24 = Rule(saturationInitial['vivid'] & valueInitial['m_sharp'], (saturationAdj['dec_big'], valueAdj['dec_big']))
-rule25 = Rule(saturationInitial['vivid'] & valueInitial['sharp'], (saturationAdj['dec_big'], valueAdj['dec_big']))
+rule24 = Rule(saturationInitial['vivid'] & valueInitial['m_bright'], (saturationAdj['dec_big'], valueAdj['dec_big']))
+rule25 = Rule(saturationInitial['vivid'] & valueInitial['bright'], (saturationAdj['dec_big'], valueAdj['dec_big']))
 
 # Additional rules (edge cases with hue)
-rule26 = Rule(hueInitial['red'] |
- hueInitial['brown'] |
- hueInitial['orange'] |
- hueInitial['yellow'] |
- hueInitial['green'] |
- hueInitial['cyan'] |
- hueInitial['blue'] |
- hueInitial['purple'] |
- hueInitial['pink'] |
- hueInitial['red2'], 
- hueAdj['no_change'])
+rule26 = Rule((hueInitial['blue'] | hueInitial['purple']), 
+              valueAdj['no_change'])
+
+rule27 = Rule((hueInitial['brown'] | hueInitial['orange'] | hueInitial['yellow'] | hueInitial['pink']) & 
+              (valueInitial['bright'] | valueInitial['m_bright']), 
+              valueAdj['dec_big'])
+
+rule28 = Rule(hueInitial['green'] | hueInitial['cyan'], 
+              saturationAdj['inc_small'])
 
 ruleset = [
     rule1,  rule2,  rule3,  rule4,  rule5, 
@@ -255,8 +236,12 @@ ruleset = [
     rule11, rule12, rule13, rule14, rule15,
     rule16, rule17, rule18, rule19, rule20,
     rule21, rule22, rule23, rule24, rule25,
-    rule26
+    rule26, rule27, rule28
     ]
+
+# Inference System
+controller = ControlSystem(ruleset)
+saturation_map, value_map = inferenceSystem(controller)
 
 image_names = getImageNames('images_data/inputs/')
 for name in image_names:
