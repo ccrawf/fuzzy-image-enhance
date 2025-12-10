@@ -12,6 +12,26 @@ import matplotlib.pyplot as plt
 from skimage.metrics import normalized_root_mse as nrmse
 from skimage.measure import shannon_entropy
 
+# Returns list of file names in input image directory
+def getImageNames(path):
+    image_names = []
+
+    for item in os.listdir(path):
+        item_path = os.path.join(path, item)
+        if os.path.isfile(item_path):
+            item = item.split('.')[0]
+            image_names.append(item)
+
+    return image_names
+
+# Resize all images into 500x500
+def resize(image, name):
+    w, h = 500, 500
+    resized_image = cv.resize(image, (w, h))
+    cv.imwrite(f"images_data/inputs_resized/{name}_resized.png", resized_image)
+
+    return resized_image
+
 # Convert to YCrCb format, perform equalization on luminance (Y), return equalized BGR image
 def histEqualize(image):
     clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(12,12))
@@ -27,17 +47,18 @@ def histEqualize(image):
 
 # Read import image, perform histogram equalization, and convert array to HSV
 # Return size of image
-def importImage(path):
+def importImage(path, name):
     input_image = cv.imread(path)
     if input_image is None:
         print(f"Error: Could not load image from {path}")
         return None
-    
-    width = len(input_image[0])
-    height = len(input_image)
 
     # Call other function to apply CLAHE (Contrast-Limited Adaptive Histogram Equalization)
+    input_image = resize(input_image, name)
     equalized_image = histEqualize(input_image)
+
+    width = len(input_image[0])
+    height = len(input_image)
     
     hsv_image = cv.cvtColor(equalized_image, cv.COLOR_BGR2HSV)
     reshaped_image = hsv_image.reshape(-1, hsv_image.shape[2])
@@ -69,7 +90,7 @@ def inferenceSystem(controller):
 def transformImage(image_name):
     # Import input image
     path = f"images_data/inputs/{image_name}.png"
-    input_image, image, width, height = importImage(path)
+    input_image, image, width, height = importImage(path, image_name)
 
     # Inference System
     controller = ControlSystem(ruleset)
@@ -106,17 +127,22 @@ def printMembershipFunctions():
 
     plt.show()
 
-# Returns list of file names in input image directory
-def getImageNames(path):
-    image_names = []
+# Metrics
+# Returns Shannon Entropy score for the grayscale image
+def computeEntropy(image):
+    image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    return shannon_entropy(image_gray)
 
-    for item in os.listdir(path):
-        item_path = os.path.join(path, item)
-        if os.path.isfile(item_path):
-            item = item.split('.')[0]
-            image_names.append(item)
+# Returns Tenengrad score (Sobel Gradient based, measures strong/sharp edges)
+def computeTenengrad(image):
+    image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
-    return image_names
+    sobel_x = cv.Sobel(image_gray, cv.CV_64F, 1, 0, ksize=3)
+    sobel_y = cv.Sobel(image_gray, cv.CV_64F, 0, 1, ksize=3)
+
+    tenengrad = np.sqrt(sobel_x**2 + sobel_y**2)
+
+    return np.mean(tenengrad)
 
 # Antecedent/Consequent ranges
 hueRange = np.arange(0,360, 1) # hue range: 0-360
@@ -239,10 +265,11 @@ for name in image_names:
 
     # Metrics analysis
     image_nrmse = nrmse(input_image, output_image)
-    image_entropy = abs(shannon_entropy(output_image) - shannon_entropy(input_image))
+    image_entropy = computeEntropy(output_image) - computeEntropy(input_image)
+    image_tenengrad = computeTenengrad(output_image)
 
     print(f"{name}:")
     print("NRMSE:", image_nrmse)
     print("Shannon Entropy:", image_entropy)
-    print("Tenengrad Score:")
+    print("Tenengrad Score:", image_tenengrad)
     print("\n")
