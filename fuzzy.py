@@ -253,7 +253,7 @@ if __name__ == '__main__':
         # Metrics analysis
         image_nrmse = nrmse(input_image, output_image)
         image_entropy = computeEntropy(output_image) - computeEntropy(input_image)
-        image_tenengrad = computeTenengrad(output_image)
+        image_tenengrad = computeTenengrad(output_image) - computeTenengrad(input_image)
 
         print(f"{name}:")
         print("NRMSE:", image_nrmse)
