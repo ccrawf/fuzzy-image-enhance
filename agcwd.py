@@ -1,7 +1,7 @@
+# AGCWD Algorithm from github.com/qyou
 import numpy as np
 import cv2 as cv
 
-import matplotlib.pyplot as plt
 from skimage.metrics import normalized_root_mse as nrmse
 from fuzzy import getImageNames, computeEntropy, computeTenengrad
 from histogram_equalization import importImage
